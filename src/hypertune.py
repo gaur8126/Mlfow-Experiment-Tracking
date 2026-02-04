@@ -21,10 +21,53 @@ param_grid = {
 grid_search = GridSearchCV(estimator=rf, param_grid=param_grid, cv=5, n_jobs=1, verbose=2)
 
 # Run without MLFlow
-grid_search.fit(x_train, y_train)
+# grid_search.fit(x_train, y_train)
 
-best_params = grid_search.best_params_
-best_score = grid_search.best_score_
+# best_params = grid_search.best_params_
+# best_score = grid_search.best_score_
 
-print(best_params)
-print(best_score)
+# print(best_params)
+# print(best_score)
+
+mlflow.set_tracking_uri('http://localhost:5000')
+mlflow.set_experiment("breast-cancer-rf-hp")
+
+with mlflow.start_run() as parent:
+
+    grid_search.fit(x_train, y_train)
+
+    #log all the child runs
+    for i in range(len(grid_search.cv_results_['params'])):
+
+        with mlflow.start_run(nested=True) as child:
+            mlflow.log_params(grid_search.cv_results_['params'][i])
+            mlflow.log_metric("accuray",grid_search.cv_results_["mean_test_score"][i])
+
+
+    best_params = grid_search.best_params_
+    best_score = grid_search.best_score_
+
+    mlflow.log_params(best_params)
+
+    mlflow.log_metric("accuracy",best_score)
+
+    train_df = x_train.copy()
+    train_df['target'] = y_train
+
+    train_df = mlflow.data.from_pandas(train_df)
+    mlflow.log_input(train_df, "training")
+
+    test_df = x_test.copy()
+    test_df['target'] = y_test
+
+    test_df = mlflow.data.from_pandas(test_df)
+    mlflow.log_input(test_df, "testing")
+
+    mlflow.log_artifact(__file__)
+
+    mlflow.sklearn.log_model(grid_search.best_estimator_, "random_forest")
+
+    mlflow.set_tag("author","Lokesh")
+
+    print(best_params)
+    print(best_score)
